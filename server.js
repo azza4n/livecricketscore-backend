@@ -9,9 +9,9 @@ const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
-// Firebase Admin initialization using Base64 secret
+// ✅ Firebase Admin using Base64 env key
 if (!process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
-  console.error("Missing FIREBASE_SERVICE_ACCOUNT_BASE64 env var");
+  console.error("❌ Missing FIREBASE_SERVICE_ACCOUNT_BASE64");
   process.exit(1);
 }
 const serviceAccountJson = Buffer.from(
@@ -28,20 +28,21 @@ admin.initializeApp({
 const db = admin.database();
 const MATCH_REF = db.ref("livecricscore/match");
 
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "changeme";
+// ✅ Admin password
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "livecricadmin";
 
-// ✅ Get Live Score
+// ✅ Fetch Live Score
 app.get("/live-score", async (req, res) => {
   try {
-    const snapshot = await MATCH_REF.once("value");
-    const match = snapshot.val() || {};
-    res.json(match);
+    const snap = await MATCH_REF.once("value");
+    res.json(snap.val() || {});
   } catch (err) {
+    console.error(err);
     res.status(500).json({ error: "Server error" });
   }
 });
 
-// ✅ Admin Login
+// ✅ Admin Login API
 app.post("/admin/login", (req, res) => {
   const { password } = req.body;
   if (password === ADMIN_PASSWORD) {
@@ -50,31 +51,42 @@ app.post("/admin/login", (req, res) => {
   return res.status(401).json({ ok: false, error: "Wrong password" });
 });
 
-// ✅ Update Score (Admin Protected)
+// ✅ Full Cricket Update Score API
 app.post("/admin/update", async (req, res) => {
-  const { password, match, score, overs, wickets, notes } = req.body;
+  const { password } = req.body;
 
   if (password !== ADMIN_PASSWORD) {
     return res.status(401).json({ error: "Unauthorized" });
   }
 
   try {
-    const data = {
-      match: match || "Local Match",
-      score: score || "0/0",
-      overs: overs || "0.0",
-      wickets: wickets || 0,
-      notes: notes || "",
+    const matchData = {
+      match_title: req.body.match_title || "Local Match",
+      team1_name: req.body.team1_name || "Team 1",
+      team2_name: req.body.team2_name || "Team 2",
+      runs: req.body.runs || "--",
+      wickets: req.body.wickets || "--",
+      overs: req.body.overs || "--",
+      overs_total: req.body.overs_total || "--",
+      striker: req.body.striker || "--",
+      non_striker: req.body.non_striker || "--",
+      bowler: req.body.bowler || "--",
+      target: req.body.target || "--",
+      balls_remaining: req.body.balls_remaining || "--",
+      notes: req.body.notes || "",
+      team1_score: req.body.team1_score || "--",
       last_updated: Date.now()
     };
 
-    await MATCH_REF.set(data);
+    await MATCH_REF.set(matchData);
 
-    res.json({ status: "Updated", data });
+    res.json({ status: "✅ Updated", matchData });
   } catch (err) {
-    res.status(500).json({ error: "Failed to update" });
+    console.error(err);
+    res.status(500).json({ error: "Update failed" });
   }
 });
 
+// ✅ Start server
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => console.log(`✅ Backend running on PORT ${PORT}`));
+app.listen(PORT, () => console.log(`✅ Backend running on port ${PORT}`));
