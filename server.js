@@ -52,12 +52,11 @@ app.post("/admin/login", (req, res) => {
 });
 
 // ✅ Full Cricket Update Score API
-app.post("/admin/update", async (req, res) => {
-  const { password } = req.body;
+const { password, ...scoreData } = req.body;
 
-  if (password !== ADMIN_PASSWORD) {
-    return res.status(401).json({ error: "Unauthorized" });
-  }
+if (password !== process.env.ADMIN_PASSWORD) {
+  return res.status(401).json({ message: "Incorrect password" });
+}
 
   try {
     const matchData = {
