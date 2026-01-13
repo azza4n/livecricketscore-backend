@@ -3,36 +3,45 @@ const cors = require("cors");
 const admin = require("firebase-admin");
 
 const app = express();
+
+// middlewares
 app.use(cors());
 app.use(express.json());
 
-// 🔐 Firebase setup
+// 🔐 Firebase Admin setup (BASE64)
+const serviceAccount = JSON.parse(
+  Buffer.from(process.env.FIREBASE_KEY, "base64").toString("utf8")
+);
+
 admin.initializeApp({
-  credential: admin.credential.cert(
-    JSON.parse(Buffer.from(process.env.FIREBASE_KEY, "base64").toString("utf8"))
-  ),
+  credential: admin.credential.cert(serviceAccount),
 });
 
 const db = admin.firestore();
 const MATCH_REF = db.collection("score").doc("live");
 
-// 🌐 Public API – get live score
+// 🌐 PUBLIC API — get live score
 app.get("/score", async (req, res) => {
   try {
-    const doc = await MATCH_REF.get();
-    if (!doc.exists) {
+    const snap = await MATCH_REF.get();
+    if (!snap.exists) {
       return res.json({});
     }
-    res.json(doc.data());
+    res.json(snap.data());
   } catch (err) {
-    res.status(500).json({ message: "Error fetching score" });
+    console.error(err);
+    res.status(500).json({ message: "Failed to fetch score" });
   }
 });
 
-// 🔐 Admin API – update score
+// 🔐 ADMIN API — update score
 app.post("/score", async (req, res) => {
   try {
     const { password, ...matchData } = req.body;
+
+    if (!password) {
+      return res.status(400).json({ message: "Password required" });
+    }
 
     if (password !== process.env.ADMIN_PASSWORD) {
       return res.status(401).json({ message: "Incorrect password" });
@@ -46,9 +55,8 @@ app.post("/score", async (req, res) => {
   }
 });
 
-// 🚀 Start server
+// 🚀 START SERVER
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log("Server running on port", PORT);
 });
-
