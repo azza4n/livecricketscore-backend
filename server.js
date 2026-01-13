@@ -10,7 +10,7 @@ app.use(express.json());
 
 // 🔐 Firebase Admin setup (BASE64)
 const serviceAccount = JSON.parse(
-  Buffer.from(process.env.FIREBASE_KEY, "base64").toString("utf8")
+  Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, "base64")
 );
 
 admin.initializeApp({
