@@ -43,13 +43,23 @@ app.get("/live-score", async (req, res) => {
 });
 
 // ✅ Admin Login API
-app.post("/admin/login", (req, res) => {
-  const { password } = req.body;
-  if (password === ADMIN_PASSWORD) {
-    return res.json({ ok: true });
+app.post("/score", async (req, res) => {
+  try {
+    const { password, ...matchData } = req.body;
+
+    if (password !== process.env.ADMIN_PASSWORD) {
+      return res.status(401).json({ message: "Incorrect password" });
+    }
+
+    await MATCH_REF.set(matchData);
+
+    res.json({ message: "Score updated" });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
   }
-  return res.status(401).json({ ok: false, error: "Wrong password" });
 });
+
 
 // ✅ Full Cricket Update Score API
 const { password, ...scoreData } = req.body;
@@ -76,8 +86,6 @@ if (password !== process.env.ADMIN_PASSWORD) {
       team1_score: req.body.team1_score || "--",
       last_updated: Date.now()
     };
-
-    await MATCH_REF.set(matchData);
 
     res.json({ status: "✅ Updated", matchData });
   } catch (err) {
