@@ -3,14 +3,17 @@ const cors = require("cors");
 const admin = require("firebase-admin");
 
 const app = express();
-
-// middlewares
 app.use(cors());
 app.use(express.json());
 
-// 🔐 Firebase Admin setup (BASE64)
+// ================= FIREBASE =================
+const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
+if (!serviceAccountBase64) {
+  throw new Error("Missing FIREBASE_SERVICE_ACCOUNT_BASE64");
+}
+
 const serviceAccount = JSON.parse(
-  Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, "base64")
+  Buffer.from(serviceAccountBase64, "base64").toString("utf8")
 );
 
 admin.initializeApp({
@@ -18,45 +21,59 @@ admin.initializeApp({
 });
 
 const db = admin.firestore();
-const MATCH_REF = db.collection("score").doc("live");
+const SCORE_REF = db.collection("score").doc("live");
 
-// 🌐 PUBLIC API — get live score
+// ================= CONFIG =================
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "livecricadmin";
+
+// ================= ROUTES =================
+
+// Health check
+app.get("/", (req, res) => {
+  res.send("LiveCricScore backend running");
+});
+
+// Get live score
 app.get("/score", async (req, res) => {
   try {
-    const snap = await MATCH_REF.get();
-    if (!snap.exists) {
-      return res.json({});
-    }
-    res.json(snap.data());
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Failed to fetch score" });
+    const doc = await SCORE_REF.get();
+    res.json(doc.exists ? doc.data() : {});
+  } catch (e) {
+    res.status(500).json({ error: "Failed to fetch score" });
   }
 });
 
-// 🔐 ADMIN API — update score
-app.post("/score", async (req, res) => {
+// Admin update
+app.post("/admin/update", async (req, res) => {
   try {
-    const { password, ...matchData } = req.body;
-
-    if (!password) {
-      return res.status(400).json({ message: "Password required" });
+    const pwd = req.body.password || req.body.adminPassword;
+    if (pwd !== ADMIN_PASSWORD) {
+      return res.status(401).json({ error: "Invalid admin password" });
     }
 
-    if (password !== process.env.ADMIN_PASSWORD) {
-      return res.status(401).json({ message: "Incorrect password" });
-    }
+    const data = {
+      title: req.body.title || "",
+      teamA: req.body.teamA || "",
+      teamB: req.body.teamB || "",
+      striker: req.body.striker || "",
+      nonstriker: req.body.nonstriker || "",
+      bowler: req.body.bowler || "",
+      runs: Number(req.body.runs) || 0,
+      wickets: Number(req.body.wickets) || 0,
+      overs: req.body.overs || "0.0",
+      rr: req.body.rr || "0.00",
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
 
-    await MATCH_REF.set(matchData);
-    res.json({ message: "Score updated" });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "Server error" });
+    await SCORE_REF.set(data, { merge: true });
+    res.json({ success: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ error: "Update failed" });
   }
 });
 
-// 🚀 START SERVER
+// ================= START =================
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("Server running on port", PORT);
-});
+app.listen(PORT, () => console.log("Server running on port", PORT));
+
