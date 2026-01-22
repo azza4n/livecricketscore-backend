@@ -7,13 +7,14 @@ app.use(cors());
 app.use(express.json());
 
 // ================= FIREBASE =================
-const serviceAccountBase64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
-if (!serviceAccountBase64) {
-  throw new Error("Missing FIREBASE_SERVICE_ACCOUNT_BASE64");
+const base64 = process.env.FIREBASE_SERVICE_ACCOUNT_BASE64;
+if (!base64) {
+  console.error("Missing FIREBASE_SERVICE_ACCOUNT_BASE64");
+  process.exit(1);
 }
 
 const serviceAccount = JSON.parse(
-  Buffer.from(serviceAccountBase64, "base64").toString("utf8")
+  Buffer.from(base64, "base64").toString("utf8")
 );
 
 admin.initializeApp({
@@ -30,15 +31,16 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "livecricadmin";
 
 // Health check
 app.get("/", (req, res) => {
-  res.send("LiveCricScore backend running");
+  res.send("LiveCricket backend running");
 });
 
-// Get live score
+// Get score (frontend)
 app.get("/score", async (req, res) => {
   try {
-    const doc = await SCORE_REF.get();
-    res.json(doc.exists ? doc.data() : {});
-  } catch (e) {
+    const snap = await SCORE_REF.get();
+    res.json(snap.exists ? snap.data() : {});
+  } catch (err) {
+    console.error("Fetch error:", err);
     res.status(500).json({ error: "Failed to fetch score" });
   }
 });
@@ -52,6 +54,7 @@ app.post("/admin/update", async (req, res) => {
     }
 
     const data = {
+      // New UI fields
       title: req.body.title || "",
       teamA: req.body.teamA || "",
       teamB: req.body.teamB || "",
@@ -62,18 +65,26 @@ app.post("/admin/update", async (req, res) => {
       wickets: Number(req.body.wickets) || 0,
       overs: req.body.overs || "0.0",
       rr: req.body.rr || "0.00",
+
+      // Backward compatibility (old site)
+      matchTitle: req.body.title || "",
+      team1: req.body.teamA || "",
+      team2: req.body.teamB || "",
+
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     };
 
     await SCORE_REF.set(data, { merge: true });
     res.json({ success: true });
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "Update failed" });
+  } catch (err) {
+    console.error("Update error:", err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
 // ================= START =================
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("Server running on port", PORT));
+app.listen(PORT, () => {
+  console.log("Server running on port", PORT);
+});
 
